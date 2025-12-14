@@ -5,7 +5,6 @@ from api_clients.courier_api import CourierAPI
 from data.test_data import CourierData
 from api_mocks.courier_creation_mocks import CourierMocks
 
-
 @allure.feature("Создание курьера")
 @allure.story("API: POST /api/v1/courier - все тестовые сценарии")
 class TestCourierCreationFinal:
@@ -189,7 +188,7 @@ class TestCourierCreationFinal:
         assert response.status_code == 400
     
     # 11. Тест: успешный запрос возвращает {"ok":true}
-    @allure.title("Тест: успешный запрос возвращает {'ok':true}")
+    @allure.title("Тест: успешный запрос возвращает 'ok':true")
     def test_successful_request_returns_ok_true(self, courier_data, mock_session_success):
         """Успешный запрос возвращает {"ok":true}"""
         api = CourierAPI(session=mock_session_success)
