@@ -1,4 +1,4 @@
-# Python
+# Игнорируем файлы Python
 __pycache__/
 *.py[cod]
 *$py.class
@@ -19,25 +19,31 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+MANIFEST
 
-# Virtual Environment
+# Игнорируем виртуальные окружения
 venv/
 env/
 .venv/
 
-# IDE
+# Игнорируем файлы редакторов (например, VS Code, PyCharm)
 .vscode/
 .idea/
 *.swp
 *.swo
+*~
 
-# OS
+# Игнорируем результаты тестов (Allure, логи, скриншоты)
+allure_results/
+allure-report/
+*.log
+screenshots/
+*.png
+*.jpg
+
+# Игнорируем скрытые системные файлы
 .DS_Store
 Thumbs.db
 
-# Allure
-allure-results/
-allure-report/
-
-# pytest
-.pytest_cache/
+# Игнорируем файл с переменными окружения (если есть)
+.env
