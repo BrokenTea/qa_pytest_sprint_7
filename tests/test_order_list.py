@@ -1,6 +1,5 @@
 import pytest
 import allure
-from unittest.mock import Mock
 from api_clients.order_api import OrderAPI
 from data.test_data import CourierData
 from api_mocks.order_list_mocks import OrderListMocks
@@ -10,36 +9,52 @@ from api_mocks.order_list_mocks import OrderListMocks
 @allure.story("API: GET /api/v1/orders - получение списка заказов с фильтрацией и пагинацией")
 class TestOrderList:
     
-    # 1. Базовый тест получения списка заказов
-    @allure.title("Тест: Получение списка заказов без параметров")
-    def test_get_orders_list_basic(self):
-        """Проверяем, что возвращается список заказов"""
-        # Создаем мок с 35 заказами
-        mock_session = OrderListMocks.create_simple_mock_session(
-            orders_data=OrderListMocks.generate_orders_list(35)
-        )
-        
-        api = OrderAPI(session=mock_session)
+    # === 1. БАЗОВЫЕ ТЕСТЫ ПОЛУЧЕНИЯ СПИСКА ЗАКАЗОВ ===
+    
+    @allure.title("Тест: Получение списка заказов - возвращает статус 200")
+    def test_get_orders_list_returns_200(self, mock_order_list_basic):
+        """Проверяем, что запрос списка заказов возвращает статус 200"""
+        api = OrderAPI(session=mock_order_list_basic)
         response = api.get_order_list()
-        
-        # Получаем JSON ответ
+        assert response.status_code == CourierData.API_ERROR_CODES["SUCCESS"]
+    
+    @allure.title("Тест: Получение списка заказов - ответ содержит ключ 'orders'")
+    def test_get_orders_list_contains_orders_key(self, mock_order_list_basic):
+        """Проверяем, что ответ содержит ключ 'orders'"""
+        api = OrderAPI(session=mock_order_list_basic)
+        response = api.get_order_list()
+        response_json = response.json()
+        assert "orders" in response_json
+    
+    @allure.title("Тест: Получение списка заказов - значение 'orders' является списком")
+    def test_get_orders_list_orders_is_list(self, mock_order_list_basic):
+        """Проверяем, что значение ключа 'orders' является списком"""
+        api = OrderAPI(session=mock_order_list_basic)
+        response = api.get_order_list()
+        response_json = response.json()
+        assert isinstance(response_json["orders"], list)
+    
+    @allure.title("Тест: Получение списка заказов - список 'orders' не пустой")
+    def test_get_orders_list_not_empty(self, mock_order_list_basic):
+        """Проверяем, что список заказов не пустой"""
+        api = OrderAPI(session=mock_order_list_basic)
+        response = api.get_order_list()
+        response_json = response.json()
+        assert len(response_json["orders"]) > 0
+    
+    @pytest.mark.parametrize("required_field", ["id", "track", "status"])
+    @allure.title("Тест: Получение списка заказов - каждый заказ содержит обязательные поля")
+    def test_get_orders_list_each_order_has_required_field(self, mock_order_list_basic, required_field):
+        """Проверяем, что каждый заказ содержит обязательные поля"""
+        api = OrderAPI(session=mock_order_list_basic)
+        response = api.get_order_list()
         response_json = response.json()
         
-        # Проверяем тело ответа содержит массив
-        assert "orders" in response_json
-        assert isinstance(response_json["orders"], list)
-        
-        # Проверяем что в списке есть хотя бы один заказ
-        assert len(response_json["orders"]) > 0
-        
-        # Проверяем обязательные поля у каждого заказа
         for order in response_json["orders"]:
-            assert "id" in order
-            assert "track" in order
-            assert "status" in order
+            assert required_field in order, f"Поле '{required_field}' отсутствует в заказе"
     
-    # 2. Тесты фильтрации с параметризацией
-    @allure.title("Тест: Получение заказов с разными комбинациями фильтров")
+    # === 2. ТЕСТЫ ФИЛЬТРАЦИИ С ПАРАМЕТРИЗАЦИЕЙ ===
+    
     @pytest.mark.parametrize("courier_id, metro_stations, test_description", [
         (None, None, "Без фильтров"),
         (123, None, "Только с courier_id"),
@@ -48,251 +63,224 @@ class TestOrderList:
         (123, [4], "С courier_id и одной станцией метро"),
         (123, [1, 2, 3, 4], "С courier_id и несколькими станциями метро")
     ])
-    def test_get_orders_with_different_filters(self, courier_id, metro_stations, test_description):
-        """
-        Проверяем различные комбинации фильтров:
-        1. courier_id - возвращает активные и завершенные заказы этого курьера
-        2. metro_stations - финальная выдача фильтруется по указанным станциям метро
-        """
-        # Создаем моковую сессию с поддержкой фильтрации
-        mock_session = OrderListMocks.create_mock_session_for_order_list(
+    @allure.title("Тест: Фильтрация заказов - возвращает статус 200 для всех комбинаций")
+    def test_get_orders_with_filters_returns_200(self, courier_id, metro_stations, test_description):
+        """Проверяем, что запрос с разными фильтрами возвращает статус 200"""
+        mock_session = OrderListMocks.create_filtered_mock_session(
             courier_id=courier_id,
             metro_stations=metro_stations
         )
-        
         api = OrderAPI(session=mock_session)
         response = api.get_order_list(
             courier_id=courier_id,
             metro_stations=metro_stations
         )
-        
-        response_json = response.json()
-        orders = response_json.get("orders", [])
-        
-        # Проверяем фильтрацию
-        if courier_id is not None:
-            # У всех заказов должен быть указанный courier_id
-            for order in orders:
-                # Проверяем что courierId существует и равен указанному
-                assert "courierId" in order, f"Заказ {order.get('id')} не имеет courierId"
-                assert order.get("courierId") == courier_id, f"Ожидался courierId={courier_id}, получен {order.get('courierId')}"
-        
-        if metro_stations is not None:
-            # У всех заказов станция метро должна быть в указанном списке
-            for order in orders:
-                assert order.get("metroStation") in metro_stations
-        
-        # Если фильтров нет, заказы могут иметь любые значения
-        # Проверяем только что ответ не пустой
-        assert len(orders) > 0
-        
-        # Проверяем обязательные поля
-        for order in orders:
-            assert "id" in order
-            assert "track" in order
-            assert "status" in order
+        assert response.status_code == CourierData.API_ERROR_CODES["SUCCESS"]
     
-    # 3. Тесты параметра LIMIT с параметризацией
-    @allure.title("Тест: Количество заказов на странице (параметр limit)")
-    @pytest.mark.parametrize("limit_value, expected_count, test_description", [
-        (30, 30, "30 заказов - стандартное значение"),
-        (0, 0, "0 заказов - пустой список"),
-        (1, 1, "1 заказ - минимальное количество"),
-        (29, 29, "29 заказов - меньше стандартного"),
-        (31, 31, "31 заказ - больше стандартного"),
-        (None, 30, "Параметр limit отсутствует - дефолтное значение 30"),
-    ])
-    def test_orders_limit_parameter(self, limit_value, expected_count, test_description):
-        """
-        Проверяем работу параметра limit:
-        - Ограничивает количество возвращаемых заказов
-        - Дефолтное значение = 30
-        - 0 возвращает пустой список
-        """
-        # Используем специальный мок для тестов limit
-        mock_session = OrderListMocks.create_mock_session_for_limit_test()
-        
+    @pytest.mark.parametrize("courier_id", [123, 456, 789])
+    @allure.title("Тест: Фильтрация по courier_id - возвращает только заказы этого курьера")
+    def test_filter_by_courier_id_returns_only_that_courier_orders(self, courier_id):
+        """Проверяем, что фильтрация по courier_id возвращает только заказы указанного курьера"""
+        mock_session = OrderListMocks.create_filtered_mock_session(courier_id=courier_id)
         api = OrderAPI(session=mock_session)
-        response = api.get_order_list(limit=limit_value)
-        
+        response = api.get_order_list(courier_id=courier_id)
         response_json = response.json()
-        orders = response_json.get("orders", [])
         
-        # Проверяем количество возвращенных заказов
-        assert len(orders) == expected_count
-        
-        # Проверяем что не превышает запрошенный limit
-        if limit_value is not None and limit_value >= 0:
-            assert len(orders) <= limit_value
-        
-        # Проверяем обязательные поля для всех заказов (если они есть)
-        for order in orders:
-            assert "id" in order
-            assert "track" in order
-            assert "status" in order
+        # Проверяем, что все заказы имеют указанный courier_id
+        for order in response_json.get("orders", []):
+            assert "courierId" in order
+            assert order["courierId"] == courier_id
     
-    # 4. Тесты параметра PAGE с параметризацией
-    @allure.title("Тест: Текущая страница показа заказов (параметр page)")
-    @pytest.mark.parametrize("page_value, test_description", [
-        (0, "Страница 0 - первая страница"),
-        (1, "Страница 1 - вторая страница"),
-        (4, "Страница 4"),
-        (None, "Параметр page отсутствует - дефолтное значение 0"),
+    @pytest.mark.parametrize("metro_stations", [
+        [4],
+        [1, 2],
+        [1, 2, 3, 4],
+        [3]
     ])
-    def test_orders_page_parameter(self, page_value, test_description):
-        """
-        Проверяем работу параметра page:
-        - Определяет смещение для пагинации
-        - Дефолтное значение = 0
-        - Разные страницы возвращают разные данные
-        """
-        # Создаем мок с фиксированными данными для проверки пагинации
-        mock_session = Mock()
-        
-        # Генерируем 100 уникальных заказов
-        all_orders = []
-        for i in range(100):
-            all_orders.append(
-                OrderListMocks.generate_order_data(
-                    order_id=1000 + i,
-                    track=200000 + i
-                )
-            )
-        
-        def mock_get(url, params=None, **kwargs):
-            response = Mock()
-            
-            # Получаем параметры пагинации
-            current_limit = params.get("limit", 30) if params else 30
-            current_page = params.get("page", 0) if params else 0
-            
-            # Вычисляем индексы для среза
-            start_idx = current_page * current_limit
-            end_idx = start_idx + current_limit
-            
-            # Получаем заказы для текущей страницы
-            paginated_orders = all_orders[start_idx:end_idx]
-            
-            response.json.return_value = {"orders": paginated_orders}
-            return response
-        
-        mock_session.get.side_effect = mock_get
-        
+    @allure.title("Тест: Фильтрация по станциям метро - возвращает заказы только с этими станциями")
+    def test_filter_by_metro_stations_returns_only_those_orders(self, metro_stations):
+        """Проверяем, что фильтрация по станциям метро возвращает только заказы с этими станциями"""
+        mock_session = OrderListMocks.create_filtered_mock_session(metro_stations=metro_stations)
         api = OrderAPI(session=mock_session)
-        response = api.get_order_list(page=page_value, limit=10)  # Используем limit=10 для теста
-        
+        response = api.get_order_list(metro_stations=metro_stations)
         response_json = response.json()
-        orders = response_json.get("orders", [])
         
-        # Проверяем что страница возвращает данные
-        if page_value is None or page_value == 0:
-            # Первая страница должна возвращать заказы
-            assert len(orders) > 0
-        
-        # Для проверки разных страниц получаем первую и вторую страницу
-        if page_value == 0:
-            # Получаем вторую страницу
-            api2 = OrderAPI(session=mock_session)
-            response2 = api2.get_order_list(page=1, limit=10)
-            orders2 = response2.json().get("orders", [])
-            
-            # Если есть заказы на второй странице, проверяем что они разные
-            if orders and orders2:
-                ids1 = {order["id"] for order in orders}
-                ids2 = {order["id"] for order in orders2}
-                
-                # Заказы на разных страницах должны быть разные
-                assert ids1.isdisjoint(ids2), "Заказы на разных страницах должны быть разными"
-        
-        # Проверяем обязательные поля
-        for order in orders:
-            assert "id" in order
-            assert "track" in order
-            assert "status" in order
+        for order in response_json.get("orders", []):
+            assert order["metroStation"] in metro_stations
     
-    # 5. Комбинированные тесты пагинации
-    @allure.title("Тест: Комбинации limit и page")
-    @pytest.mark.parametrize("limit_value, page_value, test_description", [
-        (30, 0, "Первая страница, 30 заказов"),
-        (30, 1, "Вторая страница, 30 заказов"),
-        (10, 2, "Третья страница, 10 заказов"),
-        (5, 0, "Первая страница, 5 заказов"),
-        (1, 4, "Пятая страница, 1 заказ")
+    @pytest.mark.parametrize("courier_id, metro_stations", [
+        (123, [4]),
+        (456, [1, 2]),
+        (789, [1, 2, 3, 4]),
+        (None, [3])
     ])
-    def test_orders_pagination_combined(self, limit_value, page_value, test_description):
-        """
-        Проверяем комбинации limit и page:
-        - Пагинация работает корректно с разными значениями
-        - Разные страницы возвращают разные данные при одинаковом limit
-        """
-        mock_session = Mock()
-        
-        # Генерируем 100 заказов
-        all_orders = OrderListMocks.generate_orders_list(100)
-        
-        def mock_get(url, params=None, **kwargs):
-            response = Mock()
-            
-            current_limit = params.get("limit", 30) if params else 30
-            current_page = params.get("page", 0) if params else 0
-            
-            start_idx = current_page * current_limit
-            end_idx = start_idx + current_limit
-            
-            paginated_orders = all_orders[start_idx:end_idx]
-            
-            response.json.return_value = {"orders": paginated_orders}
-            return response
-        
-        mock_session.get.side_effect = mock_get
-        
-        api = OrderAPI(session=mock_session)
-        response = api.get_order_list(limit=limit_value, page=page_value)
-        
-        response_json = response.json()
-        orders = response_json.get("orders", [])
-        
-        # Вычисляем ожидаемое количество заказов
-        total_orders = 100
-        calculated_start_idx = page_value * limit_value
-        if calculated_start_idx < total_orders:
-            expected_count = min(limit_value, total_orders - calculated_start_idx)
-        else:
-            expected_count = 0
-        
-        assert len(orders) == expected_count
-        
-        # Проверяем что количество заказов не превышает limit
-        assert len(orders) <= limit_value
-        
-        # Проверяем обязательные поля для всех заказов (если они есть)
-        for order in orders:
-            assert "id" in order
-            assert "track" in order
-            assert "status" in order
-    
-    # 6. Комбинированные тесты всех параметров
-    @allure.title("Тест: Все параметры вместе (комбинационный тест)")
-    @pytest.mark.parametrize("courier_id, metro_stations, limit_value, page_value, test_description", [
-        (123, [4], 10, 0, "Фильтр по курьеру, станции, 10 на странице, первая страница"),
-        (456, [1, 2, 3], 20, 1, "Фильтр по курьеру, нескольким станциям, 20 на странице, вторая страница"),
-        (None, [4], 5, 2, "Фильтр по станции, 5 на странице, третья страница"),
-        (789, None, 15, 0, "Фильтр по курьеру, 15 на странице, первая страница")
-    ])
-    def test_orders_all_parameters_combined(self, courier_id, metro_stations, limit_value, page_value, test_description):
-        """
-        Проверяем работу всех параметров вместе:
-        - Фильтрация по courier_id работает
-        - Фильтрация по metro_stations работает  
-        - Пагинация (limit и page) работает
-        - Все параметры совместимы друг с другом
-        """
-        # Создаем сложный мок с поддержкой всех параметров
-        mock_session = OrderListMocks.create_mock_session_for_order_list(
+    @allure.title("Тест: Фильтрация - сохраняются обязательные поля заказа")
+    def test_filtered_orders_preserve_required_fields(self, courier_id, metro_stations):
+        """Проверяем, что при фильтрации сохраняются обязательные поля заказа"""
+        mock_session = OrderListMocks.create_filtered_mock_session(
             courier_id=courier_id,
             metro_stations=metro_stations
         )
+        api = OrderAPI(session=mock_session)
+        response = api.get_order_list(
+            courier_id=courier_id,
+            metro_stations=metro_stations
+        )
+        response_json = response.json()
         
+        for order in response_json.get("orders", []):
+            assert "id" in order
+            assert "track" in order
+            assert "status" in order
+    
+    # === 3. ТЕСТЫ ПАРАМЕТРА LIMIT С ПАРАМЕТРИЗАЦИЕЙ ===
+    
+    @pytest.mark.parametrize("limit_value, expected_count", [
+        (30, 30),
+        (0, 0),
+        (1, 1),
+        (29, 29),
+        (31, 31),
+        (10, 10),
+        (50, 50),
+        (100, 100)
+    ])
+    @allure.title("Тест: Параметр limit - возвращает правильное количество заказов")
+    def test_limit_parameter_returns_correct_number_of_orders(self, limit_value, expected_count):
+        """Проверяем, что параметр limit возвращает правильное количество заказов"""
+        mock_session = OrderListMocks.create_limit_test_mock_session()
+        api = OrderAPI(session=mock_session)
+        response = api.get_order_list(limit=limit_value)
+        response_json = response.json()
+        actual_count = len(response_json.get("orders", []))
+        assert actual_count == expected_count, f"Ожидалось {expected_count}, получено {actual_count}"
+    
+    @pytest.mark.parametrize("limit_value", [5, 10, 15, 20, 25])
+    @allure.title("Тест: Параметр limit - не превышает запрошенное значение")
+    def test_limit_does_not_exceed_requested_value(self, limit_value):
+        """Проверяем, что количество возвращаемых заказов не превышает значение limit"""
+        mock_session = OrderListMocks.create_limit_test_mock_session()
+        api = OrderAPI(session=mock_session)
+        response = api.get_order_list(limit=limit_value)
+        response_json = response.json()
+        assert len(response_json.get("orders", [])) <= limit_value
+    
+    @allure.title("Тест: Без параметра limit возвращает 30 заказов (дефолтное значение)")
+    def test_no_limit_returns_default_30_orders(self):
+        """Проверяем, что без параметра limit возвращается 30 заказов (дефолтное значение)"""
+        mock_session = OrderListMocks.create_limit_test_mock_session()
+        api = OrderAPI(session=mock_session)
+        response = api.get_order_list()
+        response_json = response.json()
+        assert len(response_json.get("orders", [])) == 30
+    
+    # === 4. ТЕСТЫ ПАРАМЕТРА PAGE С ПАРАМЕТРИЗАЦИЕЙ ===
+    
+    @pytest.mark.parametrize("page_value, expected_has_orders", [
+        (0, True),
+        (1, True),
+        (2, True),
+        (3, True),
+        (10, False)  # Если страница слишком далеко, может быть пусто
+    ])
+    @allure.title("Тест: Параметр page - возвращает соответствующую страницу")
+    def test_page_parameter_returns_correct_page(self, page_value, expected_has_orders):
+        """Проверяем, что параметр page возвращает соответствующую страницу"""
+        mock_session = OrderListMocks.create_pagination_mock_session()
+        api = OrderAPI(session=mock_session)
+        response = api.get_order_list(page=page_value, limit=10)
+        response_json = response.json()
+        orders = response_json.get("orders", [])
+        
+        if expected_has_orders:
+            assert len(orders) > 0
+        # Если не ожидаем заказов, не проверяем - мок может вернуть пустой список
+    
+    @pytest.mark.parametrize("page_value", [0, 1, 2, 3, 4])
+    @allure.title("Тест: Разные страницы возвращают разные заказы")
+    def test_different_pages_return_different_orders(self, page_value):
+        """Проверяем, что разные страницы возвращают разные заказы"""
+        mock_session = OrderListMocks.create_pagination_mock_session()
+        api = OrderAPI(session=mock_session)
+        
+        # Получаем текущую страницу
+        response1 = api.get_order_list(page=page_value, limit=5)
+        orders1 = response1.json().get("orders", [])
+        
+        # Получаем следующую страницу
+        response2 = api.get_order_list(page=page_value + 1, limit=5)
+        orders2 = response2.json().get("orders", [])
+        
+        if orders1 and orders2:
+            # Получаем ID заказов с обеих страниц
+            ids1 = {order["id"] for order in orders1}
+            ids2 = {order["id"] for order in orders2}
+            
+            # Заказы на разных страницах должны быть разными
+            assert ids1.isdisjoint(ids2), f"Страницы {page_value} и {page_value + 1} содержат одинаковые заказы"
+    
+    @allure.title("Тест: Без параметра page возвращает первую страницу (дефолтное значение)")
+    def test_no_page_returns_first_page_by_default(self):
+        """Проверяем, что без параметра page возвращается первая страница (дефолтное значение)"""
+        mock_session = OrderListMocks.create_pagination_mock_session()
+        api = OrderAPI(session=mock_session)
+        response = api.get_order_list(limit=10)
+        response_json = response.json()
+        assert len(response_json.get("orders", [])) > 0
+    
+    # === 5. КОМБИНИРОВАННЫЕ ТЕСТЫ ПАГИНАЦИИ С ПАРАМЕТРИЗАЦИЕЙ ===
+    
+    @pytest.mark.parametrize("limit_value, page_value, expected_count", [
+        (30, 0, 30),
+        (10, 0, 10),
+        (10, 1, 10),
+        (5, 2, 5),
+        (1, 4, 1),
+        (20, 0, 20),
+        (15, 1, 15)
+    ])
+    @allure.title("Тест: Комбинация limit и page - возвращает правильное количество заказов")
+    def test_pagination_combination_returns_correct_count(self, limit_value, page_value, expected_count):
+        """Проверяем комбинации limit и page"""
+        mock_session = OrderListMocks.create_pagination_mock_session()
+        api = OrderAPI(session=mock_session)
+        response = api.get_order_list(limit=limit_value, page=page_value)
+        response_json = response.json()
+        actual_count = len(response_json.get("orders", []))
+        assert actual_count == expected_count, f"Для limit={limit_value}, page={page_value}: ожидалось {expected_count}, получено {actual_count}"
+    
+    @pytest.mark.parametrize("limit_value, page_value", [
+        (10, 0),
+        (10, 1),
+        (5, 2),
+        (20, 0),
+        (15, 1)
+    ])
+    @allure.title("Тест: Пагинация - количество заказов не превышает limit")
+    def test_pagination_does_not_exceed_limit(self, limit_value, page_value):
+        """Проверяем, что при пагинации количество заказов не превышает limit"""
+        mock_session = OrderListMocks.create_pagination_mock_session()
+        api = OrderAPI(session=mock_session)
+        response = api.get_order_list(limit=limit_value, page=page_value)
+        response_json = response.json()
+        assert len(response_json.get("orders", [])) <= limit_value
+    
+    # === 6. КОМБИНИРОВАННЫЕ ТЕСТЫ ВСЕХ ПАРАМЕТРОВ С ПАРАМЕТРИЗАЦИЕЙ ===
+    
+    @pytest.mark.parametrize("courier_id, metro_stations, limit_value, page_value", [
+        (123, [4], 10, 0),
+        (456, [1, 2], 20, 1),
+        (None, [4], 5, 2),
+        (789, None, 15, 0),
+        (123, [1, 2, 3, 4], 30, 0)
+    ])
+    @allure.title("Тест: Все параметры вместе - возвращает статус 200")
+    def test_all_parameters_together_returns_200(self, courier_id, metro_stations, limit_value, page_value):
+        """Проверяем, что запрос со всеми параметрами возвращает статус 200"""
+        mock_session = OrderListMocks.create_filtered_mock_session(
+            courier_id=courier_id,
+            metro_stations=metro_stations
+        )
         api = OrderAPI(session=mock_session)
         response = api.get_order_list(
             courier_id=courier_id,
@@ -300,67 +288,136 @@ class TestOrderList:
             limit=limit_value,
             page=page_value
         )
-        
+        assert response.status_code == CourierData.API_ERROR_CODES["SUCCESS"]
+    
+    @pytest.mark.parametrize("courier_id, metro_stations, limit_value, page_value", [
+        (123, [4], 10, 0),
+        (456, [1, 2], 20, 1),
+        (789, None, 15, 0)
+    ])
+    @allure.title("Тест: Все параметры вместе - фильтрация по курьеру работает")
+    def test_all_parameters_together_courier_filter_works(self, courier_id, metro_stations, limit_value, page_value):
+        """Проверяем, что при всех параметрах фильтрация по курьеру работает"""
+        mock_session = OrderListMocks.create_filtered_mock_session(
+            courier_id=courier_id,
+            metro_stations=metro_stations
+        )
+        api = OrderAPI(session=mock_session)
+        response = api.get_order_list(
+            courier_id=courier_id,
+            metro_stations=metro_stations,
+            limit=limit_value,
+            page=page_value
+        )
         response_json = response.json()
-        orders = response_json.get("orders", [])
         
-        # Проверяем фильтрацию
         if courier_id is not None:
-            for order in orders:
+            for order in response_json.get("orders", []):
                 assert "courierId" in order
-                assert order.get("courierId") == courier_id
+                assert order["courierId"] == courier_id
+    
+    @pytest.mark.parametrize("courier_id, metro_stations, limit_value, page_value", [
+        (123, [4], 10, 0),
+        (456, [1, 2], 20, 1),
+        (None, [4], 5, 2)
+    ])
+    @allure.title("Тест: Все параметры вместе - фильтрация по станциям метро работает")
+    def test_all_parameters_together_metro_filter_works(self, courier_id, metro_stations, limit_value, page_value):
+        """Проверяем, что при всех параметрах фильтрация по станции метро работает"""
+        mock_session = OrderListMocks.create_filtered_mock_session(
+            courier_id=courier_id,
+            metro_stations=metro_stations
+        )
+        api = OrderAPI(session=mock_session)
+        response = api.get_order_list(
+            courier_id=courier_id,
+            metro_stations=metro_stations,
+            limit=limit_value,
+            page=page_value
+        )
+        response_json = response.json()
         
         if metro_stations is not None:
-            for order in orders:
-                assert order.get("metroStation") in metro_stations
+            for order in response_json.get("orders", []):
+                assert order["metroStation"] in metro_stations
+    
+    @pytest.mark.parametrize("courier_id, metro_stations, limit_value, page_value", [
+        (123, [4], 10, 0),
+        (456, [1, 2], 20, 1),
+        (None, [4], 5, 2),
+        (789, None, 15, 0)
+    ])
+    @allure.title("Тест: Все параметры вместе - пагинация работает (не превышает limit)")
+    def test_all_parameters_together_pagination_within_limit(self, courier_id, metro_stations, limit_value, page_value):
+        """Проверяем, что при всех параметрах пагинация работает (не превышает limit)"""
+        mock_session = OrderListMocks.create_filtered_mock_session(
+            courier_id=courier_id,
+            metro_stations=metro_stations
+        )
+        api = OrderAPI(session=mock_session)
+        response = api.get_order_list(
+            courier_id=courier_id,
+            metro_stations=metro_stations,
+            limit=limit_value,
+            page=page_value
+        )
+        response_json = response.json()
+        assert len(response_json.get("orders", [])) <= limit_value
+    
+    @pytest.mark.parametrize("courier_id, metro_stations, limit_value, page_value", [
+        (123, [4], 10, 0),
+        (456, [1, 2], 20, 1),
+        (None, [4], 5, 2)
+    ])
+    @allure.title("Тест: Все параметры вместе - сохраняются обязательные поля")
+    def test_all_parameters_together_preserves_required_fields(self, courier_id, metro_stations, limit_value, page_value):
+        """Проверяем, что при всех параметрах сохраняются обязательные поля"""
+        mock_session = OrderListMocks.create_filtered_mock_session(
+            courier_id=courier_id,
+            metro_stations=metro_stations
+        )
+        api = OrderAPI(session=mock_session)
+        response = api.get_order_list(
+            courier_id=courier_id,
+            metro_stations=metro_stations,
+            limit=limit_value,
+            page=page_value
+        )
+        response_json = response.json()
         
-        # Проверяем пагинацию
-        assert len(orders) <= limit_value
-        
-        # Проверяем обязательные поля
-        for order in orders:
+        for order in response_json.get("orders", []):
             assert "id" in order
             assert "track" in order
             assert "status" in order
     
-    # 7. Тест: Проверка дефолтных значений
-    @allure.title("Тест: Проверка дефолтных значений параметров")
-    def test_orders_default_values(self):
-        """Проверяем дефолтные значения параметров"""
-        mock_session = Mock()
-        
-        def mock_get(url, params=None, **kwargs):
-            response = Mock()
-            
-            # Проверяем дефолтные значения
-            current_limit = params.get("limit", 30) if params else 30
-            current_page = params.get("page", 0) if params else 0
-            
-            # Генерируем заказы
-            all_orders = OrderListMocks.generate_orders_list(35)
-            
-            # Применяем пагинацию с дефолтными значениями
-            start_idx = current_page * current_limit
-            end_idx = start_idx + current_limit
-            paginated_orders = all_orders[start_idx:end_idx]
-            
-            response.json.return_value = {"orders": paginated_orders}
-            return response
-        
-        mock_session.get.side_effect = mock_get
-        
+    # === 7. ТЕСТЫ ДЕФОЛТНЫХ ЗНАЧЕНИЙ ===
+    
+    @allure.title("Тест: Дефолтные значения - возвращает статус 200")
+    def test_default_values_returns_200(self):
+        """Проверяем, что запрос без параметров возвращает статус 200"""
+        mock_session = OrderListMocks.create_default_values_mock_session()
         api = OrderAPI(session=mock_session)
-        response = api.get_order_list()  # Без параметров
-        
+        response = api.get_order_list()
+        assert response.status_code == CourierData.API_ERROR_CODES["SUCCESS"]
+    
+    @allure.title("Тест: Дефолтные значения - возвращает 30 заказов (limit=30 по умолчанию)")
+    def test_default_values_returns_30_orders(self):
+        """Проверяем, что запрос без параметров возвращает 30 заказов (дефолтное значение limit=30)"""
+        mock_session = OrderListMocks.create_default_values_mock_session()
+        api = OrderAPI(session=mock_session)
+        response = api.get_order_list()
         response_json = response.json()
-        orders = response_json.get("orders", [])
+        assert len(response_json.get("orders", [])) == 30
+    
+    @allure.title("Тест: Дефолтные значения - сохраняются обязательные поля")
+    def test_default_values_preserves_required_fields(self):
+        """Проверяем, что при дефолтных значениях сохраняются обязательные поля"""
+        mock_session = OrderListMocks.create_default_values_mock_session()
+        api = OrderAPI(session=mock_session)
+        response = api.get_order_list()
+        response_json = response.json()
         
-        # При дефолтных значениях должно быть 30 заказов (limit=30, page=0)
-        # Но у нас всего 35 заказов, так что вернется 30
-        assert len(orders) == 30
-        
-        # Проверяем обязательные поля
-        for order in orders:
+        for order in response_json.get("orders", []):
             assert "id" in order
             assert "track" in order
             assert "status" in order

@@ -1,5 +1,6 @@
 from unittest.mock import Mock
 from typing import Dict, Any, Optional
+from data.test_data import CourierData
 
 
 class CourierMocks:
@@ -54,7 +55,62 @@ class CourierMocks:
         mock_session.post.return_value = mock_post_response
         
         # Мок для DELETE запросов (удаление курьера)
-        mock_delete_response = CourierMocks.create_mock_response(status_code=200)
+        mock_delete_response = CourierMocks.create_mock_response(
+            status_code=CourierData.API_ERROR_CODES["SUCCESS"]
+        )
+        mock_session.delete.return_value = mock_delete_response
+        
+        return mock_session
+    
+    # === НОВЫЕ МЕТОДЫ ДЛЯ ФИКСТУР ===
+    
+    @staticmethod
+    def create_success_mock_session() -> Mock:
+        """Создает мок для успешного создания курьера"""
+        return CourierMocks.create_mock_session(
+            post_status_code=CourierData.API_ERROR_CODES["CREATED"],
+            post_json_data=CourierMocks.get_successful_create_response()
+        )
+    
+    @staticmethod
+    def create_error_mock_session() -> Mock:
+        """Создает мок для ошибки при создании курьера"""
+        return CourierMocks.create_mock_session(
+            post_status_code=CourierData.API_ERROR_CODES["BAD_REQUEST"],
+            post_json_data=CourierMocks.get_missing_field_response()
+        )
+    
+    @staticmethod
+    def create_conflict_mock_session() -> Mock:
+        """Создает мок для конфликта при создании курьера"""
+        return CourierMocks.create_mock_session(
+            post_status_code=CourierData.API_ERROR_CODES["CONFLICT"],
+            post_json_data=CourierMocks.get_duplicate_error_response()
+        )
+    
+    @staticmethod
+    def create_duplicate_mock_session() -> Mock:
+        """Создает мок для сценария дубликата курьера (первый успех, второй конфликт)"""
+        mock_session = Mock()
+        
+        # Первый вызов - успешное создание
+        response1 = CourierMocks.create_mock_response(
+            status_code=CourierData.API_ERROR_CODES["CREATED"],
+            json_data=CourierMocks.get_successful_create_response()
+        )
+        
+        # Второй вызов - ошибка дубликата
+        response2 = CourierMocks.create_mock_response(
+            status_code=CourierData.API_ERROR_CODES["CONFLICT"],
+            json_data=CourierMocks.get_duplicate_error_response()
+        )
+        
+        mock_session.post.side_effect = [response1, response2]
+        
+        # Мок для DELETE запросов (удаление курьера)
+        mock_delete_response = CourierMocks.create_mock_response(
+            status_code=CourierData.API_ERROR_CODES["SUCCESS"]
+        )
         mock_session.delete.return_value = mock_delete_response
         
         return mock_session
@@ -67,9 +123,15 @@ class CourierMocks:
     @staticmethod
     def get_duplicate_error_response() -> Dict[str, Any]:
         """Ответ при попытке создать дубликат курьера"""
-        return {"message": "Этот логин уже используется", "code": 409}
+        return {
+            "message": CourierData.API_RESPONSE_MESSAGES["LOGIN_ALREADY_EXISTS"],
+            "code": CourierData.API_ERROR_CODES["CONFLICT"]
+        }
     
     @staticmethod
     def get_missing_field_response() -> Dict[str, Any]:
         """Ответ при отсутствии обязательных полей"""
-        return {"message": "Недостаточно данных для создания учетной записи", "code": 400}
+        return {
+            "message": CourierData.API_RESPONSE_MESSAGES["INSUFFICIENT_DATA_FOR_ACCOUNT_CREATION"],
+            "code": CourierData.API_ERROR_CODES["BAD_REQUEST"]
+        }

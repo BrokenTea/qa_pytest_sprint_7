@@ -1,6 +1,7 @@
 from unittest.mock import Mock
 from typing import List, Optional, Dict, Any
 import random
+from data.test_data import CourierData
 
 
 class OrderMocks:
@@ -22,18 +23,16 @@ class OrderMocks:
         
         return mock_response
     
+    # === НОВЫЕ МЕТОДЫ ДЛЯ ФИКСТУР ===
+    
     @staticmethod
-    def create_mock_session_for_order_creation(
-        status_code: int = 201,
-        track_number: Optional[int] = None
-    ) -> Mock:
-        """Создает моковую сессию для создания заказа"""
-        if track_number is None:
-            track_number = random.randint(1000, 9999)
+    def create_success_mock_session() -> Mock:
+        """Создает мок для успешного создания заказа"""
+        track_number = 123456
         
         mock_session = Mock()
         mock_response = OrderMocks.create_mock_response(
-            status_code=status_code,
+            status_code=CourierData.API_ERROR_CODES["CREATED"],
             json_data={"track": track_number}
         )
         mock_session.post.return_value = mock_response
@@ -41,18 +40,9 @@ class OrderMocks:
         return mock_session
     
     @staticmethod
-    def create_mock_session_with_side_effect(*responses: Mock) -> Mock:
-        """Создает моковую сессию с последовательными ответами"""
-        mock_session = Mock()
-        mock_session.post.side_effect = responses
-        return mock_session
-    
-    @staticmethod
-    def get_successful_order_response(track: int = 123456) -> Dict[str, Any]:
-        """Успешный ответ при создании заказа"""
-        return {"track": track}
-    
-    @staticmethod
     def get_error_response() -> Dict[str, Any]:
         """Ответ с ошибкой"""
-        return {"message": "Ошибка при создании заказа", "code": 400}
+        return {
+            "message": CourierData.API_RESPONSE_MESSAGES["ORDER_CREATION_ERROR"],
+            "code": CourierData.API_ERROR_CODES["BAD_REQUEST"]
+        }

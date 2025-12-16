@@ -1,5 +1,8 @@
 from unittest.mock import Mock
 from typing import Dict, Any, Optional
+import random
+from data.test_data import CourierData
+
 
 class CourierLoginMocks:
     """Класс для создания моков API логина курьера"""
@@ -41,57 +44,52 @@ class CourierLoginMocks:
         
         return mock_session
     
-    @staticmethod
-    def create_mock_session_with_side_effect(
-        *responses: Mock
-    ) -> Mock:
-        """
-        Создает моковую сессию с последовательными ответами
-        """
-        mock_session = Mock()
-        mock_session.post.side_effect = responses
-        return mock_session
+    # === НОВЫЕ МЕТОДЫ ДЛЯ ФИКСТУР ===
     
     @staticmethod
-    def get_successful_login_response(courier_id: str = "test_courier_id") -> Dict[str, Any]:
+    def create_success_mock_session() -> Mock:
+        """Создает мок для успешного логина"""
+        return CourierLoginMocks.create_mock_login_session(
+            login_status_code=CourierData.API_ERROR_CODES["SUCCESS"],
+            login_json_data=CourierLoginMocks.get_successful_login_response()
+        )
+    
+    @staticmethod
+    def create_missing_data_mock_session() -> Mock:
+        """Создает мок для ошибки недостатка данных при логине"""
+        return CourierLoginMocks.create_mock_login_session(
+            login_status_code=CourierData.API_ERROR_CODES["BAD_REQUEST"],
+            login_json_data=CourierLoginMocks.get_missing_login_data_response()
+        )
+    
+    @staticmethod
+    def create_not_found_mock_session() -> Mock:
+        """Создает мок для ошибки 'не найдено' при логине"""
+        return CourierLoginMocks.create_mock_login_session(
+            login_status_code=CourierData.API_ERROR_CODES["NOT_FOUND"],
+            login_json_data=CourierLoginMocks.get_account_not_found_response()
+        )
+    
+    @staticmethod
+    def get_successful_login_response(courier_id: str = None) -> Dict[str, Any]:
         """Успешный ответ при логине курьера"""
+        if courier_id is None:
+            # Генерируем случайный ID для курьера
+            courier_id = f"courier_{random.randint(10000, 99999)}"
         return {"id": courier_id}
     
     @staticmethod
     def get_missing_login_data_response() -> Dict[str, Any]:
         """Ответ при недостатке данных для логина"""
-        return {"message": "Недостаточно данных для входа", "code": 400}
+        return {
+            "message": CourierData.API_RESPONSE_MESSAGES["INSUFFICIENT_DATA_FOR_LOGIN"],
+            "code": CourierData.API_ERROR_CODES["BAD_REQUEST"]
+        }
     
     @staticmethod
     def get_account_not_found_response() -> Dict[str, Any]:
         """Ответ при неверных учетных данных"""
-        return {"message": "Учетная запись не найдена", "code": 404}
-    
-    @staticmethod
-    def get_incorrect_credentials_response() -> Dict[str, Any]:
-        """Ответ при неверных учетных данных (альтернативный)"""
-        return {"message": "Учетная запись не найдена", "code": 404}
-    
-    @staticmethod
-    def create_mock_for_successful_login() -> Mock:
-        """Создает мок для успешного логина"""
-        return CourierLoginMocks.create_mock_response(
-            status_code=200,
-            json_data=CourierLoginMocks.get_successful_login_response()
-        )
-    
-    @staticmethod
-    def create_mock_for_missing_data() -> Mock:
-        """Создает мок для ошибки недостатка данных"""
-        return CourierLoginMocks.create_mock_response(
-            status_code=400,
-            json_data=CourierLoginMocks.get_missing_login_data_response()
-        )
-    
-    @staticmethod
-    def create_mock_for_not_found() -> Mock:
-        """Создает мок для ошибки 'не найдено'"""
-        return CourierLoginMocks.create_mock_response(
-            status_code=404,
-            json_data=CourierLoginMocks.get_account_not_found_response()
-        )
+        return {
+            "message": CourierData.API_RESPONSE_MESSAGES["ACCOUNT_NOT_FOUND"],
+            "code": CourierData.API_ERROR_CODES["NOT_FOUND"]
+        }
