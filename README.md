@@ -22,6 +22,8 @@ qa_pytest_sprint_7/
 ├── data/                           # Данные для тестов
 │   ├── __init__.py
 │   └── test_data.py               # Генерация тестовых данных с использованием Faker
+│   ├── unique_data_generator.py
+│   └── data_factory.py
 ├── api_clients/                    # Клиенты для работы с API
 │   ├── __init__.py
 │   ├── courier_api.py             # API для работы с курьерами

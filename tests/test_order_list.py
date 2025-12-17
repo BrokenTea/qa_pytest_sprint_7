@@ -176,25 +176,23 @@ class TestOrderList:
     
     # === 4. ТЕСТЫ ПАРАМЕТРА PAGE С ПАРАМЕТРИЗАЦИЕЙ ===
     
-    @pytest.mark.parametrize("page_value, expected_has_orders", [
+    @pytest.mark.parametrize("page_value, should_have_orders", [
         (0, True),
         (1, True),
-        (2, True),
+        (2, True), 
         (3, True),
-        (10, False)  # Если страница слишком далеко, может быть пусто
+        (10, False)
     ])
     @allure.title("Тест: Параметр page - возвращает соответствующую страницу")
-    def test_page_parameter_returns_correct_page(self, page_value, expected_has_orders):
+    def test_page_parameter_returns_correct_page(self, page_value, should_have_orders):
         """Проверяем, что параметр page возвращает соответствующую страницу"""
         mock_session = OrderListMocks.create_pagination_mock_session()
         api = OrderAPI(session=mock_session)
         response = api.get_order_list(page=page_value, limit=10)
         response_json = response.json()
         orders = response_json.get("orders", [])
-        
-        if expected_has_orders:
-            assert len(orders) > 0
-        # Если не ожидаем заказов, не проверяем - мок может вернуть пустой список
+ 
+        assert (len(orders) > 0) == should_have_orders
     
     @pytest.mark.parametrize("page_value", [0, 1, 2, 3, 4])
     @allure.title("Тест: Разные страницы возвращают разные заказы")
@@ -211,13 +209,11 @@ class TestOrderList:
         response2 = api.get_order_list(page=page_value + 1, limit=5)
         orders2 = response2.json().get("orders", [])
         
-        if orders1 and orders2:
-            # Получаем ID заказов с обеих страниц
-            ids1 = {order["id"] for order in orders1}
-            ids2 = {order["id"] for order in orders2}
+        ids1 = {order["id"] for order in orders1}
+        ids2 = {order["id"] for order in orders2}
             
-            # Заказы на разных страницах должны быть разными
-            assert ids1.isdisjoint(ids2), f"Страницы {page_value} и {page_value + 1} содержат одинаковые заказы"
+        # Заказы на разных страницах должны быть разными
+        assert ids1.isdisjoint(ids2), f"Страницы {page_value} и {page_value + 1} содержат одинаковые заказы"
     
     @allure.title("Тест: Без параметра page возвращает первую страницу (дефолтное значение)")
     def test_no_page_returns_first_page_by_default(self):
@@ -290,14 +286,13 @@ class TestOrderList:
         )
         assert response.status_code == CourierData.API_ERROR_CODES["SUCCESS"]
     
+    @allure.title("Тест: Все параметры вместе - фильтрация по курьеру работает (с courier_id)")
     @pytest.mark.parametrize("courier_id, metro_stations, limit_value, page_value", [
         (123, [4], 10, 0),
-        (456, [1, 2], 20, 1),
-        (789, None, 15, 0)
+        (456, [1, 2], 20, 1)
     ])
-    @allure.title("Тест: Все параметры вместе - фильтрация по курьеру работает")
-    def test_all_parameters_together_courier_filter_works(self, courier_id, metro_stations, limit_value, page_value):
-        """Проверяем, что при всех параметрах фильтрация по курьеру работает"""
+    def test_all_parameters_together_with_courier_filter(self, courier_id, metro_stations, limit_value, page_value):
+        """Проверяем, что при всех параметрах фильтрация по курьеру работает, когда courier_id указан"""
         mock_session = OrderListMocks.create_filtered_mock_session(
             courier_id=courier_id,
             metro_stations=metro_stations
@@ -311,19 +306,44 @@ class TestOrderList:
         )
         response_json = response.json()
         
-        if courier_id is not None:
-            for order in response_json.get("orders", []):
-                assert "courierId" in order
-                assert order["courierId"] == courier_id
+        # Без условия - всегда проверяем фильтрацию
+        for order in response_json.get("orders", []):
+            assert "courierId" in order
+            assert order["courierId"] == courier_id
+
+    @allure.title("Тест: Все параметры вместе - фильтрация по курьеру не применяется (без courier_id)")
+    def test_all_parameters_together_without_courier_filter(self):
+        """Проверяем, что при всех параметрах фильтрация по курьеру не применяется, когда courier_id не указан"""
+        courier_id = None
+        metro_stations = None
+        limit_value = 15
+        page_value = 0
+        
+        mock_session = OrderListMocks.create_filtered_mock_session(
+            courier_id=courier_id,
+            metro_stations=metro_stations
+        )
+        api = OrderAPI(session=mock_session)
+        response = api.get_order_list(
+            courier_id=courier_id,
+            metro_stations=metro_stations,
+            limit=limit_value,
+            page=page_value
+        )
+        response_json = response.json()
+        
+        # Когда courier_id не указан, заказы могут быть с любым courierId или без него
+        # Проверяем только что ответ получен успешно
+        assert response.status_code == CourierData.API_ERROR_CODES["SUCCESS"]
+        assert "orders" in response_json
     
+    @allure.title("Тест: Все параметры вместе - фильтрация по станциям метро работает (с metro_stations)")
     @pytest.mark.parametrize("courier_id, metro_stations, limit_value, page_value", [
         (123, [4], 10, 0),
-        (456, [1, 2], 20, 1),
-        (None, [4], 5, 2)
+        (456, [1, 2], 20, 1)
     ])
-    @allure.title("Тест: Все параметры вместе - фильтрация по станциям метро работает")
-    def test_all_parameters_together_metro_filter_works(self, courier_id, metro_stations, limit_value, page_value):
-        """Проверяем, что при всех параметрах фильтрация по станции метро работает"""
+    def test_all_parameters_together_with_metro_filter(self, courier_id, metro_stations, limit_value, page_value):
+        """Проверяем, что при всех параметрах фильтрация по станции метро работает, когда metro_stations указаны"""
         mock_session = OrderListMocks.create_filtered_mock_session(
             courier_id=courier_id,
             metro_stations=metro_stations
@@ -337,9 +357,32 @@ class TestOrderList:
         )
         response_json = response.json()
         
-        if metro_stations is not None:
-            for order in response_json.get("orders", []):
-                assert order["metroStation"] in metro_stations
+        # Без условия - всегда проверяем фильтрацию
+        for order in response_json.get("orders", []):
+            assert order["metroStation"] in metro_stations
+        
+    @allure.title("Тест: Все параметры вместе - фильтрация по станциям метро не применяется (без metro_stations)")
+    def test_all_parameters_together_without_metro_filter(self):
+        """Проверяем, что при всех параметрах фильтрация по станции метро не применяется, когда metro_stations не указаны"""
+        courier_id = None
+        metro_stations = None
+        limit_value = 5
+        page_value = 2
+        
+        mock_session = OrderListMocks.create_filtered_mock_session(
+            courier_id=courier_id,
+            metro_stations=metro_stations
+        )
+        api = OrderAPI(session=mock_session)
+        response = api.get_order_list(
+            courier_id=courier_id,
+            metro_stations=metro_stations,
+            limit=limit_value,
+            page=page_value
+        )
+        
+        # Проверяем только успешный ответ
+        assert response.status_code == CourierData.API_ERROR_CODES["SUCCESS"]
     
     @pytest.mark.parametrize("courier_id, metro_stations, limit_value, page_value", [
         (123, [4], 10, 0),

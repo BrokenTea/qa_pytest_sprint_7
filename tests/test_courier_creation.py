@@ -30,9 +30,8 @@ class TestCourierCreationFinal:
             unique_courier_data["password"]
         )
         
-        if login_response.status_code == 200:
-            courier_id = login_response.json().get("id")
-            delete_courier(courier_id)
+        courier_id = login_response.json().get("id")
+        delete_courier(courier_id)
     
     # 2. Тест: нельзя создать двух одинаковых курьеров
     @allure.title("Тест: нельзя создать двух одинаковых курьеров")
@@ -58,9 +57,8 @@ class TestCourierCreationFinal:
             unique_courier_data["password"]
         )
         
-        if login_response.status_code == 200:
-            courier_id = login_response.json().get("id")
-            delete_courier(courier_id)
+        courier_id = login_response.json().get("id")
+        delete_courier(courier_id)
     
     # 3. Тест: повторяющийся логин возвращает код 409 Conflict
     @allure.title("Тест: повторяющийся логин возвращает код 409 Conflict")
@@ -100,9 +98,8 @@ class TestCourierCreationFinal:
             courier_data["password"]
         )
         
-        if login_response.status_code == 200:
-            courier_id = login_response.json().get("id")
-            delete_courier(courier_id)
+        courier_id = login_response.json().get("id")
+        delete_courier(courier_id)
     
     # 5. Тест: курьер не создается с пустым password
     @allure.title("Тест: курьер не создается с пустым password")
@@ -179,10 +176,9 @@ class TestCourierCreationFinal:
             courier_data["login"],
             courier_data["password"]
         )
-        
-        if login_response.status_code == 200:
-            courier_id = login_response.json().get("id")
-            delete_courier(courier_id)
+
+        courier_id = login_response.json().get("id")
+        delete_courier(courier_id)
     
     # 10. Тест: запрос с ошибкой возвращает код 400
     @allure.title("Тест: запрос с ошибкой возвращает код 400")
@@ -217,9 +213,8 @@ class TestCourierCreationFinal:
             courier_data["password"]
         )
         
-        if login_response.status_code == 200:
-            courier_id = login_response.json().get("id")
-            delete_courier(courier_id)
+        courier_id = login_response.json().get("id")
+        delete_courier(courier_id)
     
     # 12. Тест: ошибка при отсутствии поля login
     @allure.title("Тест: ошибка при отсутствии поля login")
@@ -275,7 +270,6 @@ class TestCourierCreationFinal:
             courier_data1["login"],
             courier_data1["password"]
         )
-        
-        if login_response.status_code == 200:
-            courier_id = login_response.json().get("id")
-            delete_courier(courier_id)
+
+        courier_id = login_response.json().get("id")
+        delete_courier(courier_id)
